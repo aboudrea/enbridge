@@ -1,0 +1,162 @@
+{
+	"name": "PL_03_Child",
+	"properties": {
+		"description": "Control Framework child pipeline used to execute Worker pipelines within a given execution stage. This pipeline will be called once for each stage, then execute all Workers in parallel.",
+		"activities": [
+			{
+				"name": "Get Pipelines",
+				"description": "Returns all pipelines from the metadata to be executed within a given processing stage.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[ControlFramework].[GetPipelinesInStage]",
+						"storedProcedureParameters": {
+							"ExecutionId": {
+								"type": "Guid",
+								"value": {
+									"value": "@pipeline().parameters.ExecutionId",
+									"type": "Expression"
+								}
+							},
+							"StageId": {
+								"type": "Int32",
+								"value": {
+									"value": "@pipeline().parameters.StageId",
+									"type": "Expression"
+								}
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_ControlFramework",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": false
+				}
+			},
+			{
+				"name": "Execute Pipelines",
+				"description": "Second level ForEach to run in parallel all pipelines within the stage. Items for iteration passed from the Get Pipelines lookup activity.",
+				"type": "ForEach",
+				"dependsOn": [
+					{
+						"activity": "Get Pipelines",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"items": {
+						"value": "@activity('Get Pipelines').output.value",
+						"type": "Expression"
+					},
+					"isSequential": false,
+					"batchCount": 50,
+					"activities": [
+						{
+							"name": "Worker Pipeline Executor",
+							"description": "Run the required worker pipeline and wait for its completion. Update metadata once done.",
+							"type": "ExecutePipeline",
+							"dependsOn": [],
+							"userProperties": [],
+							"typeProperties": {
+								"pipeline": {
+									"referenceName": "PL_04_Infant",
+									"type": "PipelineReference"
+								},
+								"waitOnCompletion": false,
+								"parameters": {
+									"executionId": {
+										"value": "@pipeline().parameters.ExecutionId",
+										"type": "Expression"
+									},
+									"stageId": {
+										"value": "@pipeline().parameters.StageId",
+										"type": "Expression"
+									},
+									"pipelineId": {
+										"value": "@item().PipelineId",
+										"type": "Expression"
+									},
+									"configId": {
+										"value": "@item().ConfigId",
+										"type": "Expression"
+									}
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Wait Until Current Stage Completes",
+				"description": "To make sure the next stage does not execute (because once ForEach \"starts\" to execute, activity is considered done and that's not what we want)",
+				"type": "ExecutePipeline",
+				"dependsOn": [
+					{
+						"activity": "Execute Pipelines",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_ForEach_Helper",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"ExecutionId": {
+							"value": "@pipeline().parameters.ExecutionId",
+							"type": "Expression"
+						},
+						"StageId": {
+							"value": "@pipeline().parameters.StageId",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"StageId": {
+				"type": "int"
+			},
+			"ExecutionId": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Control Framework"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:13Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

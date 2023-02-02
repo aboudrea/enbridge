@@ -1,0 +1,262 @@
+{
+	"name": "PL_Synapse_to_Parquet_cf",
+	"properties": {
+		"description": ".",
+		"activities": [
+			{
+				"name": "LKP Metadata",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@replace(\n    replace(\n        replace(\n            'SELECT * FROM [ControlFramework].[Parameters]\n            WHERE PipelineId = #PIPELINEID# AND ExcludeInGeneral=0 #AND#',\n            '#PIPELINEID#',\n            pipeline().parameters.PipelineId\n        ),\n        '#AND#',\n        IF(greater(length(coalesce(pipeline().parameters.ConfigId,'')),0) ,'AND ConfigId=#CONFIGID#' ,'')\n    ),\n    '#CONFIGID#',\n    coalesce(pipeline().parameters.ConfigId,'')\n)",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_ControlFramework",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "Copy Synapse to Parquet",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "LKP Metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderQuery": {
+							"value": "@activity('LKP Metadata').output.firstRow.SourceSQL \n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "ParquetSink",
+						"storeSettings": {
+							"type": "AzureBlobFSWriteSettings"
+						},
+						"formatSettings": {
+							"type": "ParquetWriteSettings"
+						}
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_Synapse",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionSecret",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionURL",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_Parquet",
+						"type": "DatasetReference",
+						"parameters": {
+							"container": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationContainer",
+								"type": "Expression"
+							},
+							"directory": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationFolder",
+								"type": "Expression"
+							},
+							"filename": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationFileName",
+								"type": "Expression"
+							},
+							"storageURL": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationURL",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "If CETAS",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Copy Synapse to Parquet",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@not(equals(   coalesce(activity('LKP Metadata').output.firstRow.SynapseScript  ,'')    ,''))",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "LKP Get ColumnScript",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlDWSource",
+									"sqlReaderQuery": {
+										"value": "@replace(\n'\n\nif object_id(''temdb..#sp_describe_first_result_set'') IS NOT NULL \nDROP TABLE #sp_describe_first_result_set \nCREATE TABLE #sp_describe_first_result_set(is_hidden BIT NOT NULL   \n,column_ordinal INT NOT NULL  \n,[name] sysname  NULL\n,is_nullable bit NOT NULL \n,system_type_id int NOT NULL \n,system_type_name nvarchar(256) NULL \n,max_length smallint NOT NULL \n,[precision] tinyint NOT NULL \n,[scale] tinyint NOT NULL\n,collation_name sysname NULL \n,user_type_id \tint NULL\n,user_type_database sysname NULL \n,user_type_schema sysname NULL \n,user_type_name sysname NULL \n,assembly_qualified_type_name\tnvarchar(4000)\n,xml_collection_id\tint NULL\n,xml_collection_database\tsysname NULL\n,xml_collection_schema\tsysname NULL\n,xml_collection_name\tsysname NULL\n,is_xml_document\tbit NOT NULL\n,is_case_sensitive\tbit NOT NULL\n,is_fixed_length_clr_type\tbit NOT NULL\n,source_server\tsysname NULL\n,source_database\tsysname NULL\n,source_schema\tsysname NULL\n,source_table\tsysname NULL\n,source_column\tsysname NULL\n,is_identity_column\tbit NULL\t\n,is_part_of_unique_key\tbit NULL\t\n,is_updateable\tbit NULL\n,is_computed_column\tbit NULL\n,is_sparse_column_set\tbit NULL\n,ordinal_in_order_by_list\tsmallint NULL\n,order_by_list_length\tsmallint NULL\n,order_by_is_descending\tsmallint NULL\n,tds_type_id\tint NOT NULL\n,tds_length\tint NOT NULL\n,tds_collation_id\tint NULL\n,tds_collation_sort_id\ttinyint NULL \n)\nINSERT INTO #sp_describe_first_result_set\n  EXEC sp_describe_first_result_set @sql = N''#SOURCESQL#''\n\nSELECT ColumnScript =STRING_AGG (CONCAT(quotename(name),'' '',system_type_name   ), '',  '') WITHIN GROUP(ORDER BY column_ordinal ASC)\nFROM #sp_describe_first_result_set \n\n'\n\n,'#SOURCESQL#'   \n, replace(activity('LKP Metadata').output.firstRow.SourceSQL,'''','''''')\n)",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_Synapse",
+									"type": "DatasetReference",
+									"parameters": {
+										"secretName": {
+											"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionSecret",
+											"type": "Expression"
+										},
+										"secretURL": {
+											"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionURL",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						},
+						{
+							"name": "Execute CETAS",
+							"type": "Lookup",
+							"dependsOn": [
+								{
+									"activity": "LKP Get ColumnScript",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "SqlDWSource",
+									"sqlReaderQuery": {
+										"value": "@replace(   activity('LKP Metadata').output.firstRow.SynapseScript\n,'#COLUMN_DEFINITIONS#'  \n, activity('LKP Get ColumnScript').output.firstRow.ColumnScript  )",
+										"type": "Expression"
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_Synapse",
+									"type": "DatasetReference",
+									"parameters": {
+										"secretName": {
+											"value": "@activity('LKP Metadata').output.firstRow.SynapseConnectionSecret",
+											"type": "Expression"
+										},
+										"secretURL": {
+											"value": "@activity('LKP Metadata').output.firstRow.SynapseConnectionURL",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						}
+					]
+				}
+			}
+		],
+		"parameters": {
+			"ConfigId": {
+				"type": "string"
+			},
+			"PipelineId": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"failedTableName": {
+				"type": "String"
+			},
+			"a": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Control Framework/Workers"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:12Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

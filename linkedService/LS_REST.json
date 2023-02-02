@@ -1,0 +1,27 @@
+{
+	"name": "LS_REST",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"SubscriptionID": {
+				"type": "string"
+			},
+			"ResourceGroupName": {
+				"type": "string"
+			},
+			"FactoryName": {
+				"type": "string"
+			},
+			"RunID": {
+				"type": "string"
+			}
+		},
+		"annotations": [],
+		"type": "RestService",
+		"typeProperties": {
+			"url": "@{concat('https://management.azure.com/subscriptions/', linkedService().SubscriptionID, '/resourceGroups/', linkedService().ResourceGroupName, '/providers/Microsoft.DataFactory/factories/', linkedService().FactoryName, '/pipelineruns/', linkedService().RunID, '?api-version=2018-06-01')}",
+			"enableServerCertificateValidation": true,
+			"authenticationType": "Anonymous"
+		}
+	}
+}

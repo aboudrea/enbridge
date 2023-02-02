@@ -1,0 +1,200 @@
+{
+	"name": "PL_Synapse_to_AzSql_cf",
+	"properties": {
+		"activities": [
+			{
+				"name": "LKP Metadata",
+				"description": "",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@replace(\n    replace(\n        replace(\n            'SELECT * FROM [ControlFramework].[Parameters]\n            WHERE PipelineId = #PIPELINEID# AND ExcludeInGeneral=0 #AND#',\n            '#PIPELINEID#',\n            pipeline().parameters.PipelineId\n        ),\n        '#AND#',\n        IF(greater(length(coalesce(pipeline().parameters.ConfigId,'')),0) ,'AND ConfigId=#CONFIGID#' ,'')\n    ),\n    '#CONFIGID#',\n    coalesce(pipeline().parameters.ConfigId,'')\n)",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_ControlFramework",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": true
+				}
+			},
+			{
+				"name": "Copy Synapse to AzSql",
+				"type": "Copy",
+				"dependsOn": [
+					{
+						"activity": "Truncate Destination Table",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "SqlDWSource",
+						"sqlReaderQuery": {
+							"value": "@activity('LKP Metadata').output.firstRow.SourceSQL \n",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"sink": {
+						"type": "AzureSqlSink"
+					},
+					"enableStaging": false,
+					"translator": {
+						"type": "TabularTranslator",
+						"typeConversion": true,
+						"typeConversionSettings": {
+							"allowDataTruncation": true,
+							"treatBooleanAsNumber": false
+						}
+					}
+				},
+				"inputs": [
+					{
+						"referenceName": "DS_Synapse",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionSecret",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@activity('LKP Metadata').output.firstRow.SourceConnectionURL",
+								"type": "Expression"
+							}
+						}
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "DS_AzSqlTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"schema": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationSchema",
+								"type": "Expression"
+							},
+							"tableName": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationTable",
+								"type": "Expression"
+							},
+							"secretName": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationConnectionSecret",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationConnectionURL",
+								"type": "Expression"
+							}
+						}
+					}
+				]
+			},
+			{
+				"name": "Truncate Destination Table",
+				"type": "Lookup",
+				"dependsOn": [
+					{
+						"activity": "LKP Metadata",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "7.00:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderQuery": {
+							"value": "@replace(replace(  \n'TRUNCATE TABLE [destinationSchema].[destinationTable];\n\nselect returnValue=1;'\n\n,'destinationSchema',  activity('LKP Metadata').output.firstRow.DestinationSchema)\n,'destinationTable'    ,  activity('LKP Metadata').output.firstRow.DestinationTable)",
+							"type": "Expression"
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_AzSqlTable",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationConnectionSecret",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@activity('LKP Metadata').output.firstRow.DestinationConnectionURL",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"ConfigId": {
+				"type": "string"
+			},
+			"PipelineId": {
+				"type": "string"
+			}
+		},
+		"variables": {
+			"failedTableName": {
+				"type": "String"
+			},
+			"CETAS": {
+				"type": "String"
+			},
+			"DestDBName": {
+				"type": "String"
+			}
+		},
+		"folder": {
+			"name": "Control Framework/Workers"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:12Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

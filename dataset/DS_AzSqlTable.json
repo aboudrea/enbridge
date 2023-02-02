@@ -1,0 +1,51 @@
+{
+	"name": "DS_AzSqlTable",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "LS_AzSqlDb",
+			"type": "LinkedServiceReference",
+			"parameters": {
+				"secretName": {
+					"value": "@dataset().secretName",
+					"type": "Expression"
+				},
+				"secretURL": {
+					"value": "@dataset().secretURL",
+					"type": "Expression"
+				}
+			}
+		},
+		"parameters": {
+			"schema": {
+				"type": "string",
+				"defaultValue": "metadata"
+			},
+			"tableName": {
+				"type": "string",
+				"defaultValue": "v_ConfigADFAzSqlToParquet"
+			},
+			"secretName": {
+				"type": "string",
+				"defaultValue": "connstr-sqldb-env-metastore"
+			},
+			"secretURL": {
+				"type": "string",
+				"defaultValue": "https://goadmp-dev-env-lurp-kv.vault.azure.net/"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": {
+				"value": "@dataset().schema",
+				"type": "Expression"
+			},
+			"table": {
+				"value": "@dataset().tablename",
+				"type": "Expression"
+			}
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

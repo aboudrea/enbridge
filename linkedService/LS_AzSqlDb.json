@@ -1,0 +1,37 @@
+{
+	"name": "LS_AzSqlDb",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"secretName": {
+				"type": "string",
+				"defaultValue": "connstr-sqldb-env-metastore"
+			},
+			"secretURL": {
+				"type": "string",
+				"defaultValue": "https://goadmp-dev-env-lurp-kv.vault.azure.net/"
+			}
+		},
+		"annotations": [],
+		"type": "AzureSqlDatabase",
+		"typeProperties": {
+			"connectionString": {
+				"type": "AzureKeyVaultSecret",
+				"store": {
+					"referenceName": "LS_KeyVault",
+					"type": "LinkedServiceReference",
+					"parameters": {
+						"kvURL": {
+							"value": "@linkedService().secretURL",
+							"type": "Expression"
+						}
+					}
+				},
+				"secretName": {
+					"value": "@linkedService().secretName",
+					"type": "Expression"
+				}
+			}
+		}
+	}
+}

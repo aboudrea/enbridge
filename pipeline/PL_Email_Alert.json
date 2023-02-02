@@ -1,0 +1,181 @@
+{
+	"name": "PL_Email_Alert",
+	"properties": {
+		"activities": [
+			{
+				"name": "Send Alerts",
+				"description": "True = alerts need sending.\nFalse = do nothing.",
+				"type": "IfCondition",
+				"dependsOn": [
+					{
+						"activity": "Check For Alerts",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@activity('Check For Alerts').output.firstRow.SendAlerts",
+						"type": "Expression"
+					},
+					"ifTrueActivities": [
+						{
+							"name": "Get Email Parts",
+							"description": "Return all required content from the metadata database to send an email alerting using the ControlFramework. The lookup returns the exact content for the function body request.",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "0.00:10:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "[ControlFramework].[GetEmailAlertParts]",
+									"storedProcedureParameters": {
+										"PipelineId": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.pipelineId",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_ControlFramework",
+									"type": "DatasetReference",
+									"parameters": {
+										"secretName": {
+											"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+											"type": "Expression"
+										},
+										"secretURL": {
+											"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+											"type": "Expression"
+										}
+									}
+								},
+								"firstRowOnly": true
+							}
+						},
+						{
+							"name": "Send failure notifications",
+							"type": "WebActivity",
+							"dependsOn": [
+								{
+									"activity": "Get Email Parts",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"policy": {
+								"timeout": "0.01:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"url": {
+									"value": "@activity('Get Email Parts').output.firstRow.logicAppHttpTrigger",
+									"type": "Expression"
+								},
+								"method": "POST",
+								"headers": {
+									"Content-Type": "application/json"
+								},
+								"body": {
+									"value": "{\n\"DataFactoryName\":\"@{if(startsWith(string(pipeline().parameters.DataFactoryName),'@{pipeline().DataFactoryName}'),pipeline().RunId,pipeline().parameters.DataFactoryName)}\",\n\"PipelineRunId\":\"@{if(startsWith(string(pipeline().parameters.PipelineRunId),'@{pipeline().RunId}'),pipeline().RunId,pipeline().parameters.PipelineRunId)}\",\n\"PipelineId\":\"@{if(startsWith(string(pipeline().parameters.PipelineId),'@{pipeline().PipelineId}'),pipeline().parameters.PipelineId,pipeline().parameters.PipelineId)}\",\n\"ConfigId\":\"@{if(startsWith(string(pipeline().parameters.ConfigId),'@{pipeline().ConfigId}'),pipeline().parameters.ConfigId,pipeline().parameters.ConfigId)}\",\n\"PipelineName\":\"@{if(startsWith(string(pipeline().parameters.PipelineName),'@{pipeline().Pipeline}'),pipeline().Pipeline,pipeline().parameters.PipelineName)}\",\n\"TriggerTime\":\"@{formatDateTime(if(startsWith(string(pipeline().parameters.TriggerTime),'@{pipeline().TriggerTime}'),pipeline().TriggerTime,pipeline().parameters.TriggerTime),'yyyy-MM-dd hh:mm tt')}\",\n\"OutputMessage\":\"@{replace(coalesce(pipeline().parameters.ErrorMessage,'The pipeline run has failed. To get the specific error message, please provide ''@activity([Name of Activity]).Error.Message'' as dynamic content for the parameter ErrorMessage.'),'\"','')}\",\n\"EmailTo\":\"@{activity('Get Email Parts').output.firstRow.emailRecipients}\",\n\"EmailBcc\":\"@{activity('Get Email Parts').output.firstRow.emailBccRecipients}\",\n\"EmailCc\":\"@{activity('Get Email Parts').output.firstRow.emailCcRecipients}\",\n\"EmailImportance\":\"@{activity('Get Email Parts').output.firstRow.emailImportance}\"\n}",
+									"type": "Expression"
+								}
+							}
+						}
+					]
+				}
+			},
+			{
+				"name": "Check For Alerts",
+				"description": "Checks the properties tables and if any recipients in the database require alerts sending for the current pipeline ID.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:00:30",
+					"retry": 3,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[ControlFramework].[CheckForEmailAlerts]",
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_ControlFramework",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+								"type": "Expression"
+							}
+						}
+					},
+					"firstRowOnly": true
+				}
+			}
+		],
+		"parameters": {
+			"DataFactoryName": {
+				"type": "string",
+				"defaultValue": "@{pipeline().DataFactoryName}"
+			},
+			"PipelineRunId": {
+				"type": "string",
+				"defaultValue": "@{pipeline().RunId}"
+			},
+			"PipelineName": {
+				"type": "string",
+				"defaultValue": "@{pipeline().Pipeline}"
+			},
+			"PipelineId": {
+				"type": "string",
+				"defaultValue": "1"
+			},
+			"TriggerTime": {
+				"type": "string",
+				"defaultValue": "@{pipeline().TriggerTime}"
+			},
+			"ErrorMessage": {
+				"type": "string"
+			},
+			"ConfigId": {
+				"type": "string",
+				"defaultValue": "1"
+			}
+		},
+		"folder": {
+			"name": "Control Framework/Utilities"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:12Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

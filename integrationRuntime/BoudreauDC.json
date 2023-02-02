@@ -1,0 +1,6 @@
+{
+	"name": "BoudreauDC",
+	"properties": {
+		"type": "SelfHosted"
+	}
+}

@@ -1,0 +1,172 @@
+{
+	"name": "PL_ForEach_Helper",
+	"properties": {
+		"activities": [
+			{
+				"name": "Wait Until Stage or Pipeline Completes",
+				"description": "Loops until the Worker pipeline called completes.\n\nSimple status:\n- Running = new iteration.\n- Done = break.",
+				"type": "Until",
+				"dependsOn": [
+					{
+						"activity": "Get Wait Duration",
+						"dependencyConditions": [
+							"Succeeded"
+						]
+					}
+				],
+				"userProperties": [],
+				"typeProperties": {
+					"expression": {
+						"value": "@equals(int(activity('Check Execution Status').output.firstRow.PropertyValue),1)",
+						"type": "Expression"
+					},
+					"activities": [
+						{
+							"name": "Check Execution Status",
+							"type": "Lookup",
+							"dependsOn": [],
+							"policy": {
+								"timeout": "7.00:00:00",
+								"retry": 0,
+								"retryIntervalInSeconds": 30,
+								"secureOutput": false,
+								"secureInput": false
+							},
+							"userProperties": [],
+							"typeProperties": {
+								"source": {
+									"type": "AzureSqlSource",
+									"sqlReaderStoredProcedureName": "ControlFramework.CheckExecutionStatus",
+									"storedProcedureParameters": {
+										"LocalExecutionId": {
+											"type": "Guid",
+											"value": {
+												"value": "@pipeline().parameters.ExecutionId",
+												"type": "Expression"
+											}
+										},
+										"StageId": {
+											"type": "Int32",
+											"value": {
+												"value": "@pipeline().parameters.StageId",
+												"type": "Expression"
+											}
+										}
+									},
+									"queryTimeout": "02:00:00",
+									"partitionOption": "None"
+								},
+								"dataset": {
+									"referenceName": "DS_ControlFramework",
+									"type": "DatasetReference",
+									"parameters": {
+										"secretName": {
+											"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+											"type": "Expression"
+										},
+										"secretURL": {
+											"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+											"type": "Expression"
+										}
+									}
+								}
+							}
+						},
+						{
+							"name": "Wait If Running",
+							"description": "True = Do nothing.\nFalse = Wait, before the next iteration.",
+							"type": "IfCondition",
+							"dependsOn": [
+								{
+									"activity": "Check Execution Status",
+									"dependencyConditions": [
+										"Succeeded"
+									]
+								}
+							],
+							"userProperties": [],
+							"typeProperties": {
+								"expression": {
+									"value": "@equals(int(activity('Check Execution Status').output.firstRow.PropertyValue),1)",
+									"type": "Expression"
+								},
+								"ifFalseActivities": [
+									{
+										"name": "Wait for Pipeline",
+										"description": "The processing pipeline is still running so Wait before checking its status again.",
+										"type": "Wait",
+										"dependsOn": [],
+										"userProperties": [],
+										"typeProperties": {
+											"waitTimeInSeconds": {
+												"value": "@activity('Get Wait Duration').output.firstRow.PropertyValue",
+												"type": "Expression"
+											}
+										}
+									}
+								]
+							}
+						}
+					],
+					"timeout": "0.04:00:00"
+				}
+			},
+			{
+				"name": "Get Wait Duration",
+				"description": "Return wait duration in seconds from database properties table to be used during each Until iteration when the Worker pipeline is still running.",
+				"type": "Lookup",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.00:10:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "AzureSqlSource",
+						"sqlReaderStoredProcedureName": "[ControlFramework].[GetPropertyValue]",
+						"storedProcedureParameters": {
+							"PropertyName": {
+								"type": "String",
+								"value": "PipelineStatusCheckDuration"
+							}
+						},
+						"queryTimeout": "02:00:00",
+						"partitionOption": "None"
+					},
+					"dataset": {
+						"referenceName": "DS_ControlFramework",
+						"type": "DatasetReference",
+						"parameters": {
+							"secretName": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretName",
+								"type": "Expression"
+							},
+							"secretURL": {
+								"value": "@pipeline().globalParameters.controlFrameworkSecretURL",
+								"type": "Expression"
+							}
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"ExecutionId": {
+				"type": "string"
+			},
+			"StageId": {
+				"type": "string"
+			}
+		},
+		"folder": {
+			"name": "Control Framework/Utilities"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:12Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

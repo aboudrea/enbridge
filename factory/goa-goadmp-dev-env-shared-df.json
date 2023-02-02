@@ -1,0 +1,21 @@
+{
+	"name": "goa-goadmp-dev-env-shared-df",
+	"properties": {
+		"globalParameters": {
+			"controlFrameworkSecretName": {
+				"type": "string",
+				"value": "connstr-sqldb-env-metastore"
+			},
+			"controlFrameworkSecretURL": {
+				"type": "string",
+				"value": "https://goa-dev-env-kv.vault.azure.net/"
+			}
+		}
+	},
+	"location": "canadacentral",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "c621d278-0daf-4ea8-89b2-a785139d83c6",
+		"tenantId": "72f988bf-86f1-41af-91ab-2d7cd011db47"
+	}
+}

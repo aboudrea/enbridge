@@ -1,0 +1,40 @@
+{
+	"name": "PL_01_Grandparent",
+	"properties": {
+		"description": "Control Framework grandparent pipeline used optionally to bootstrap any wider processes in your Data Factory that then calls the Control Framework.",
+		"activities": [
+			{
+				"name": "Control Framework",
+				"description": "Call Control Framework",
+				"type": "ExecutePipeline",
+				"dependsOn": [],
+				"userProperties": [],
+				"typeProperties": {
+					"pipeline": {
+						"referenceName": "PL_02_Parent",
+						"type": "PipelineReference"
+					},
+					"waitOnCompletion": true,
+					"parameters": {
+						"BatchName": {
+							"value": "@pipeline().parameters.BatchName",
+							"type": "Expression"
+						}
+					}
+				}
+			}
+		],
+		"parameters": {
+			"BatchName": {
+				"type": "string",
+				"defaultValue": "Daily"
+			}
+		},
+		"folder": {
+			"name": "Control Framework"
+		},
+		"annotations": [],
+		"lastPublishTime": "2022-03-26T14:41:14Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

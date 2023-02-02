@@ -1,0 +1,17 @@
+{
+	"name": "LS_KeyVault",
+	"type": "Microsoft.DataFactory/factories/linkedservices",
+	"properties": {
+		"parameters": {
+			"kvURL": {
+				"type": "string",
+				"defaultValue": "https://goa-dev-env-kv.vault.azure.net/"
+			}
+		},
+		"annotations": [],
+		"type": "AzureKeyVault",
+		"typeProperties": {
+			"baseUrl": "@{linkedService().kvURL}"
+		}
+	}
+}
