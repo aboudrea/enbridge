@@ -1,0 +1,9 @@
+{
+	"name": "adf-enbridge-prod",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "a9ebb731-71fe-40d5-b0fc-e4a7ed0c2564",
+		"tenantId": "16b3c013-d300-468d-ac64-7eda0820b6d3"
+	}
+}
